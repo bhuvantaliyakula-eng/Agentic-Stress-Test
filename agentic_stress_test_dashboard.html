@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic Stress Test Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9f9f8; color: #0b0b0b; padding: 2rem; }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: #52514e; margin-bottom: 2rem; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .tab-btn { padding: 6px 14px; border: 0.5px solid #c3c2b7; border-radius: 8px; background: transparent; color: #52514e; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .tab-btn.active { background: #f1f0e9; color: #0b0b0b; border-color: #888780; }
+  .tab-btn:hover { background: #f1f0e9; }
+  .metric { background: #f1f0e9; border-radius: 8px; padding: 1rem; }
+  .metric p:first-child { font-size: 12px; color: #898781; margin: 0 0 4px; }
+  .metric p:last-child { font-size: 22px; font-weight: 500; margin: 0; }
+  .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 1.5rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 8px; font-size: 12px; color: #52514e; }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .chart-wrap { position: relative; width: 100%; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .bar-label { font-size: 13px; width: 80px; color: #52514e; }
+  .bar-track { flex: 1; background: #f1f0e9; border-radius: 4px; height: 8px; overflow: hidden; }
+  .bar-fill { height: 8px; border-radius: 4px; }
+  .bar-val { font-size: 13px; font-weight: 500; width: 36px; text-align: right; }
+  .section-label { font-size: 13px; color: #52514e; margin: 0 0 12px; }
+  .tab-section { display: none; }
+  .tab-section.active { display: block; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a19; color: #fff; }
+    .metric { background: #2c2c2a; }
+    .metric p:first-child { color: #898781; }
+    .tab-btn { border-color: #444441; color: #c3c2b7; }
+    .tab-btn.active { background: #2c2c2a; color: #fff; border-color: #888780; }
+    .tab-btn:hover { background: #2c2c2a; }
+    .bar-track { background: #2c2c2a; }
+    .legend { color: #c3c2b7; }
+    .bar-label { color: #c3c2b7; }
+    .section-label { color: #c3c2b7; }
+    .subtitle { color: #c3c2b7; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Agentic Stress Test — Model Comparison</h1>
+<p class="subtitle">Memory recall performance across Anthropic, Gemini, OpenAI, and Perplexity under ascending prompt noise</p>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showTab('overview')">Overview</button>
+  <button class="tab-btn" onclick="showTab('trend')">Score trend</button>
+  <button class="tab-btn" onclick="showTab('dist')">Score breakdown</button>
+  <button class="tab-btn" onclick="showTab('criteria')">Criteria analysis</button>
+</div>
+
+<div id="tab-overview" class="tab-section active">
+  <div class="grid-4">
+    <div class="metric"><p>Anthropic avg</p><p style="color:#2a78d6">3.99 / 4</p></div>
+    <div class="metric"><p>Gemini avg</p><p style="color:#1baf7a">3.62 / 4</p></div>
+    <div class="metric"><p>OpenAI avg</p><p style="color:#eda100">2.74 / 4</p></div>
+    <div class="metric"><p>Perplexity avg</p><p style="color:#e34948">2.83 / 4</p></div>
+  </div>
+  <div class="legend">
+    <span><span class="swatch" style="background:#2a78d6"></span>Anthropic (100 rounds)</span>
+    <span><span class="swatch" style="background:#1baf7a"></span>Gemini (100 rounds)</span>
+    <span><span class="swatch" style="background:#eda100"></span>OpenAI (100 rounds)</span>
+    <span><span class="swatch" style="background:#e34948"></span>Perplexity (500 rounds)</span>
+  </div>
+  <div class="chart-wrap" style="height:280px;"><canvas id="overviewChart" role="img" aria-label="Bar chart comparing average recall scores across 4 models">Anthropic 3.99, Gemini 3.62, OpenAI 2.74, Perplexity 2.83 out of 4.</canvas></div>
+  <div style="margin-top:1.5rem;">
+    <p class="section-label">Perfect recall rate (score 4/4)</p>
+    <div class="bar-row"><span class="bar-label">Anthropic</span><div class="bar-track"><div class="bar-fill" style="width:99%;background:#2a78d6;"></div></div><span class="bar-val">99%</span></div>
+    <div class="bar-row"><span class="bar-label">Gemini</span><div class="bar-track"><div class="bar-fill" style="width:68%;background:#1baf7a;"></div></div><span class="bar-val">68%</span></div>
+    <div class="bar-row"><span class="bar-label">OpenAI</span><div class="bar-track"><div class="bar-fill" style="width:47%;background:#eda100;"></div></div><span class="bar-val">47%</span></div>
+    <div class="bar-row"><span class="bar-label">Perplexity</span><div class="bar-track"><div class="bar-fill" style="width:37.8%;background:#e34948;"></div></div><span class="bar-val">37.8%</span></div>
+  </div>
+</div>
+
+<div id="tab-trend" class="tab-section">
+  <p class="section-label">Rolling average score per 10 rounds — shows how recall holds up as prompts get longer</p>
+  <div class="legend">
+    <span><span class="swatch" style="background:#2a78d6"></span>Anthropic</span>
+    <span><span class="swatch" style="background:#1baf7a"></span>Gemini</span>
+    <span><span class="swatch" style="background:#eda100"></span>OpenAI</span>
+    <span><span class="swatch" style="background:#e34948"></span>Perplexity</span>
+  </div>
+  <div class="chart-wrap" style="height:320px;"><canvas id="trendChart" role="img" aria-label="Line chart showing score trends over rounds for all 4 models">Anthropic stays near 4.0. Gemini improves. OpenAI fluctuates. Perplexity declines after round 250.</canvas></div>
+</div>
+
+<div id="tab-dist" class="tab-section">
+  <p class="section-label">How often each model scored 0, 1, 2, 3, or 4 out of 4</p>
+  <div class="chart-wrap" style="height:320px;"><canvas id="distChart" role="img" aria-label="Stacked bar chart showing score distribution per model">Anthropic 99% score-4. Gemini 68% score-4. OpenAI 47% score-4 and 17% score-0. Perplexity 37.8% score-4.</canvas></div>
+  <div class="legend" style="margin-top:12px;">
+    <span><span class="swatch" style="background:#2a78d6"></span>Score 4 (perfect)</span>
+    <span><span class="swatch" style="background:#1baf7a"></span>Score 3</span>
+    <span><span class="swatch" style="background:#eda100"></span>Score 2</span>
+    <span><span class="swatch" style="background:#e34948"></span>Score 1</span>
+    <span><span class="swatch" style="background:#888780"></span>Score 0 (fail)</span>
+  </div>
+</div>
+
+<div id="tab-criteria" class="tab-section">
+  <p class="section-label">How often each model passed each of the 4 grading criteria</p>
+  <div class="chart-wrap" style="height:320px;"><canvas id="criteriaChart" role="img" aria-label="Grouped bar chart showing pass rates for 4 criteria across all models">Anthropic passes all criteria nearly 100%. Other models show varying weaknesses.</canvas></div>
+  <div class="legend" style="margin-top:12px;">
+    <span><span class="swatch" style="background:#2a78d6"></span>Anthropic</span>
+    <span><span class="swatch" style="background:#1baf7a"></span>Gemini</span>
+    <span><span class="swatch" style="background:#eda100"></span>OpenAI</span>
+    <span><span class="swatch" style="background:#e34948"></span>Perplexity</span>
+  </div>
+</div>
+
+<script>
+const C = { a:'#2a78d6', g:'#1baf7a', o:'#eda100', p:'#e34948' };
+
+function showTab(id) {
+  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    b.classList.toggle('active', ['overview','trend','dist','criteria'][i]===id);
+  });
+  if (id==='trend' && !window._t) buildTrend();
+  if (id==='dist' && !window._d) buildDist();
+  if (id==='criteria' && !window._c) buildCriteria();
+}
+
+new Chart(document.getElementById('overviewChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Anthropic','Gemini','OpenAI','Perplexity'],
+    datasets: [{ label:'Avg score', data:[3.99,3.62,2.74,2.83], backgroundColor:[C.a,C.g,C.o,C.p], borderRadius:4, barThickness:40 }]
+  },
+  options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>` ${c.parsed.y.toFixed(2)} / 4`}} }, scales:{ x:{ticks:{color:'#898781'},grid:{display:false}}, y:{min:0,max:4,ticks:{color:'#898781',stepSize:1},grid:{color:'rgba(0,0,0,0.06)'}} } }
+});
+
+function buildTrend() {
+  window._t = true;
+  const a=[[1,4],[11,4],[21,4],[31,3.9],[41,4],[51,4],[61,4],[71,4],[81,4],[91,4]];
+  const g=[[1,3],[11,3.3],[21,3.3],[31,3.4],[41,3.6],[51,3.9],[61,3.9],[71,4],[81,4],[91,3.8]];
+  const o=[[1,1.8],[11,2.1],[21,1.9],[31,3.1],[41,2.5],[51,3.9],[61,3.2],[71,3],[81,3.6],[91,2.3]];
+  const p=[[1,3.8],[51,3.5],[101,3.4],[151,3.2],[201,3.5],[251,2.7],[301,2.9],[351,2.2],[401,2.1],[451,2.8]];
+  new Chart(document.getElementById('trendChart'), {
+    type:'line',
+    data:{ datasets:[
+      {label:'Anthropic', data:a.map(d=>({x:d[0],y:d[1]})), borderColor:C.a, pointRadius:3, pointBackgroundColor:C.a, tension:0.3, borderWidth:2},
+      {label:'Gemini',    data:g.map(d=>({x:d[0],y:d[1]})), borderColor:C.g, pointRadius:3, pointBackgroundColor:C.g, tension:0.3, borderWidth:2},
+      {label:'OpenAI',    data:o.map(d=>({x:d[0],y:d[1]})), borderColor:C.o, pointRadius:3, pointBackgroundColor:C.o, tension:0.3, borderWidth:2, borderDash:[5,3]},
+      {label:'Perplexity',data:p.map(d=>({x:d[0],y:d[1]})), borderColor:C.p, pointRadius:3, pointBackgroundColor:C.p, tension:0.3, borderWidth:2},
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{type:'linear',title:{display:true,text:'Round number',color:'#898781',font:{size:12}},ticks:{color:'#898781'},grid:{color:'rgba(0,0,0,0.06)'}}, y:{min:0,max:4,title:{display:true,text:'Avg score (0–4)',color:'#898781',font:{size:12}},ticks:{color:'#898781',stepSize:1},grid:{color:'rgba(0,0,0,0.06)'}} } }
+  });
+}
+
+function buildDist() {
+  window._d = true;
+  new Chart(document.getElementById('distChart'), {
+    type:'bar',
+    data:{ labels:['Anthropic','Gemini','OpenAI','Perplexity'], datasets:[
+      {label:'Score 4', data:[99,68,47,37.8], backgroundColor:'#2a78d6', stack:'s', borderRadius:0},
+      {label:'Score 3', data:[1,26,18,27],    backgroundColor:'#1baf7a', stack:'s', borderRadius:0},
+      {label:'Score 2', data:[0,6,14,19.8],   backgroundColor:'#eda100', stack:'s', borderRadius:0},
+      {label:'Score 1', data:[0,0,4,11.6],    backgroundColor:'#e34948', stack:'s', borderRadius:0},
+      {label:'Score 0', data:[0,0,17,3.8],    backgroundColor:'#888780', stack:'s', borderRadius:0},
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`}}}, scales:{ x:{stacked:true,ticks:{color:'#898781'},grid:{display:false}}, y:{stacked:true,min:0,max:100,ticks:{color:'#898781',callback:v=>v+'%'},grid:{color:'rgba(0,0,0,0.06)'}} } }
+  });
+}
+
+function buildCriteria() {
+  window._c = true;
+  new Chart(document.getElementById('criteriaChart'), {
+    type:'bar',
+    data:{ labels:['Mentioned SKU','Recalled facts','Described pattern','Reasonable qty'], datasets:[
+      {label:'Anthropic',  data:[100,100,99,99], backgroundColor:C.a, borderRadius:3, barThickness:14},
+      {label:'Gemini',     data:[72,100,86,100], backgroundColor:C.g, borderRadius:3, barThickness:14},
+      {label:'OpenAI',     data:[52,79,64,82],   backgroundColor:C.o, borderRadius:3, barThickness:14},
+      {label:'Perplexity', data:[75,85,60,84],   backgroundColor:C.p, borderRadius:3, barThickness:14},
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y}%`}}}, scales:{ x:{ticks:{color:'#898781',font:{size:12}},grid:{display:false}}, y:{min:0,max:100,ticks:{color:'#898781',callback:v=>v+'%'},grid:{color:'rgba(0,0,0,0.06)'}} } }
+  });
+}
+</script>
+</body>
+</html>
