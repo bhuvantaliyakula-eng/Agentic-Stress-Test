@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic Stress Test Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9f9f8; color: #0b0b0b; padding: 2rem; max-width: 900px; margin: 0 auto; }
+h1 { font-size: 22px; font-weight: 500; margin-bottom: 4px; }
+.subtitle { font-size: 14px; color: #52514e; margin-bottom: 1rem; }
+.status { font-size: 13px; color: #52514e; margin-bottom: 1.5rem; padding: 10px 14px; background: #f1f0e9; border-radius: 8px; }
+.tabs { display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.tab-btn { padding: 6px 14px; border: 0.5px solid #c3c2b7; border-radius: 8px; background: transparent; color: #52514e; font-size: 13px; cursor: pointer; font-family: inherit; }
+.tab-btn.active, .tab-btn:hover { background: #f1f0e9; color: #0b0b0b; border-color: #888780; }
+.metric { background: #f1f0e9; border-radius: 8px; padding: 1rem; }
+.metric p:first-child { font-size: 12px; color: #898781; margin: 0 0 4px; }
+.metric p:last-child { font-size: 20px; font-weight: 500; margin: 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 1.5rem; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 8px; font-size: 12px; color: #52514e; }
+.legend span { display: flex; align-items: center; gap: 4px; }
+.swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.chart-wrap { position: relative; width: 100%; }
+.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.bar-label { font-size: 13px; min-width: 90px; color: #52514e; }
+.bar-track { flex: 1; background: #e8e7e0; border-radius: 4px; height: 8px; overflow: hidden; }
+.bar-fill { height: 8px; border-radius: 4px; }
+.bar-val { font-size: 13px; font-weight: 500; min-width: 40px; text-align: right; }
+.section-label { font-size: 13px; color: #52514e; margin: 0 0 12px; }
+.tab-section { display: none; }
+.tab-section.active { display: block; }
+.loading { text-align: center; padding: 3rem; color: #898781; font-size: 14px; }
+@media (prefers-color-scheme: dark) {
+  body { background: #1a1a19; color: #fff; }
+  .metric { background: #2c2c2a; }
+  .metric p:first-child { color: #898781; }
+  .tab-btn { border-color: #444441; color: #c3c2b7; }
+  .tab-btn.active, .tab-btn:hover { background: #2c2c2a; color: #fff; border-color: #888780; }
+  .bar-track { background: #2c2c2a; }
+  .legend { color: #c3c2b7; }
+  .bar-label { color: #c3c2b7; }
+  .section-label { color: #c3c2b7; }
+  .subtitle { color: #c3c2b7; }
+  .status { background: #2c2c2a; color: #c3c2b7; }
+}
+</style>
+</head>
+<body>
+
+<h1>Agentic Stress Test — Model Comparison</h1>
+<p class="subtitle">Memory recall performance under ascending prompt noise</p>
+<div class="status" id="status">Loading data...</div>
+
+<div class="tabs" id="tabs" style="display:none;">
+  <button class="tab-btn active" onclick="showTab('overview')">Overview</button>
+  <button class="tab-btn" onclick="showTab('trend')">Score trend</button>
+  <button class="tab-btn" onclick="showTab('dist')">Score breakdown</button>
+  <button class="tab-btn" onclick="showTab('criteria')">Criteria analysis</button>
+</div>
+
+<div id="tab-overview" class="tab-section active">
+  <div class="loading" id="loading-msg">Fetching data...</div>
+  <div id="overview-content" style="display:none;">
+    <div class="grid" id="metric-cards"></div>
+    <div class="legend" id="legend-overview"></div>
+    <div class="chart-wrap" style="height:280px;"><canvas id="overviewChart" role="img" aria-label="Bar chart comparing average recall scores across models"></canvas></div>
+    <div style="margin-top:1.5rem;">
+      <p class="section-label">Perfect recall rate (score 4/4)</p>
+      <div id="recall-bars"></div>
+    </div>
+  </div>
+</div>
+
+<div id="tab-trend" class="tab-section">
+  <p class="section-label">Rolling average score per 10 rounds</p>
+  <div class="legend" id="legend-trend"></div>
+  <div class="chart-wrap" style="height:320px;"><canvas id="trendChart" role="img" aria-label="Line chart showing score trends over rounds"></canvas></div>
+</div>
+
+<div id="tab-dist" class="tab-section">
+  <p class="section-label">How often each model scored 0, 1, 2, 3, or 4 out of 4</p>
+  <div class="chart-wrap" style="height:320px;"><canvas id="distChart" role="img" aria-label="Stacked bar chart showing score distribution per model"></canvas></div>
+  <div class="legend" style="margin-top:12px;">
+    <span><span class="swatch" style="background:#2a78d6"></span>Score 4 (perfect)</span>
+    <span><span class="swatch" style="background:#1baf7a"></span>Score 3</span>
+    <span><span class="swatch" style="background:#eda100"></span>Score 2</span>
+    <span><span class="swatch" style="background:#e34948"></span>Score 1</span>
+    <span><span class="swatch" style="background:#888780"></span>Score 0 (fail)</span>
+  </div>
+</div>
+
+<div id="tab-criteria" class="tab-section">
+  <p class="section-label">How often each model passed each of the 4 grading criteria</p>
+  <div class="legend" id="legend-criteria"></div>
+  <div class="chart-wrap" style="height:320px;"><canvas id="criteriaChart" role="img" aria-label="Grouped bar chart showing pass rates for 4 criteria"></canvas></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────
+// TO ADD A NEW MODEL: just add its filename to this list below.
+// The name shown in charts is auto-extracted from the filename.
+// ─────────────────────────────────────────────────────────────────
+const FILES = [
+  'Agentic_Stress_Test_Anthropic.xlsx',
+  'Agentic_Stress_Test_Gemini.xlsx',
+  'Agentic_Stress_test_OpenAI.xlsx',
+  'Agentic_Stress_Test_Perplexity.xlsx',
+];
+
+const BASE = 'https://raw.githubusercontent.com/bhuvantaliyakula-eng/Agentic-Stress-Test/main/';
+const PALETTE = ['#2a78d6','#1baf7a','#eda100','#e34948','#4a3aa7','#e87ba4','#eb6834','#008300'];
+
+let allData = {};
+let charts  = {};
+
+function extractModelName(filename) {
+  return filename
+    .replace(/\.xlsx$/i, '')
+    .replace(/Agentic_Stress_[Tt]est_?/i, '')
+    .replace(/_/g, ' ')
+    .trim();
+}
+
+async function fetchAndParseXlsx(filename) {
+  const res = await fetch(BASE + filename);
+  if (!res.ok) throw new Error(`Could not load ${filename} (${res.status})`);
+  const buf = await res.arrayBuffer();
+  const wb  = XLSX.read(buf, { type: 'array' });
+  const ws  = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws);
+}
+
+function analyzeRows(rows) {
+  const scores = rows.map(r => Number(r.score_0_to_4)).filter(s => !isNaN(s));
+  const total  = scores.length;
+  if (!total) return null;
+
+  const avg  = scores.reduce((a,b)=>a+b,0) / total;
+  const dist = {0:0,1:0,2:0,3:0,4:0};
+  scores.forEach(s => dist[Math.round(s)] = (dist[Math.round(s)]||0)+1);
+
+  const buckets = {};
+  rows.forEach(r => {
+    const rn = Number(r.round_number);
+    const b  = Math.floor((rn-1)/10)*10+1;
+    if (!buckets[b]) buckets[b]=[];
+    buckets[b].push(Number(r.score_0_to_4));
+  });
+  const bucketAvgs = Object.entries(buckets)
+    .sort((a,b)=>Number(a[0])-Number(b[0]))
+    .map(([k,v])=>({ x:Number(k), y:v.reduce((a,b)=>a+b,0)/v.length }));
+
+  const isTruthy = v => v===true || v==='True' || v===1 || v==='TRUE';
+  const skuTrue     = rows.filter(r=>isTruthy(r.mentioned_sku)).length;
+  const factsTrue   = rows.filter(r=>isTruthy(r.mentioned_facts)).length;
+  const patternTrue = rows.filter(r=>isTruthy(r.mentioned_pattern)).length;
+  const qtyTrue     = rows.filter(r=>isTruthy(r.reasonable_qty)).length;
+
+  return {
+    total, avg,
+    dist,
+    pct4: dist[4]/total*100,
+    pct0: dist[0]/total*100,
+    bucketAvgs,
+    criteria: {
+      sku:     Math.round(skuTrue/total*100),
+      facts:   Math.round(factsTrue/total*100),
+      pattern: Math.round(patternTrue/total*100),
+      qty:     Math.round(qtyTrue/total*100),
+    }
+  };
+}
+
+function buildLegend(id, models) {
+  document.getElementById(id).innerHTML = models.map((m,i)=>
+    `<span><span class="swatch" style="background:${PALETTE[i%PALETTE.length]}"></span>${m} (${allData[m].total} rounds)</span>`
+  ).join('');
+}
+
+function buildOverview(models) {
+  document.getElementById('metric-cards').innerHTML = models.map((m,i)=>
+    `<div class="metric"><p>${m} avg</p><p style="color:${PALETTE[i%PALETTE.length]}">${allData[m].avg.toFixed(2)} / 4</p></div>`
+  ).join('');
+
+  buildLegend('legend-overview', models);
+
+  document.getElementById('recall-bars').innerHTML = models.map((m,i)=>
+    `<div class="bar-row">
+      <span class="bar-label">${m}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${allData[m].pct4.toFixed(1)}%;background:${PALETTE[i%PALETTE.length]};"></div></div>
+      <span class="bar-val">${allData[m].pct4.toFixed(1)}%</span>
+    </div>`
+  ).join('');
+
+  if (charts.overview) charts.overview.destroy();
+  charts.overview = new Chart(document.getElementById('overviewChart'), {
+    type: 'bar',
+    data: {
+      labels: models,
+      datasets: [{ label:'Avg score', data:models.map(m=>allData[m].avg), backgroundColor:models.map((_,i)=>PALETTE[i%PALETTE.length]), borderRadius:4, barThickness:40 }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>` ${c.parsed.y.toFixed(2)} / 4`}} },
+      scales:{ x:{ticks:{color:'#898781'},grid:{display:false}}, y:{min:0,max:4,ticks:{color:'#898781',stepSize:1},grid:{color:'rgba(0,0,0,0.06)'}} }
+    }
+  });
+
+  document.getElementById('overview-content').style.display='';
+  document.getElementById('loading-msg').style.display='none';
+}
+
+function buildTrend(models) {
+  buildLegend('legend-trend', models);
+  if (charts.trend) charts.trend.destroy();
+  charts.trend = new Chart(document.getElementById('trendChart'), {
+    type:'line',
+    data:{ datasets: models.map((m,i)=>({
+      label:m, data:allData[m].bucketAvgs,
+      borderColor:PALETTE[i%PALETTE.length], pointBackgroundColor:PALETTE[i%PALETTE.length],
+      pointRadius:3, tension:0.3, borderWidth:2, borderDash: i%2===0?[]:[5,3]
+    }))},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{type:'linear',title:{display:true,text:'Round number',color:'#898781',font:{size:12}},ticks:{color:'#898781'},grid:{color:'rgba(0,0,0,0.06)'}},
+        y:{min:0,max:4,title:{display:true,text:'Avg score (0–4)',color:'#898781',font:{size:12}},ticks:{color:'#898781',stepSize:1},grid:{color:'rgba(0,0,0,0.06)'}}
+      }
+    }
+  });
+}
+
+function buildDist(models) {
+  if (charts.dist) charts.dist.destroy();
+  charts.dist = new Chart(document.getElementById('distChart'), {
+    type:'bar',
+    data:{
+      labels:models,
+      datasets:[
+        {label:'Score 4',data:models.map(m=>allData[m].dist[4]/allData[m].total*100),backgroundColor:'#2a78d6',stack:'s',borderRadius:0},
+        {label:'Score 3',data:models.map(m=>allData[m].dist[3]/allData[m].total*100),backgroundColor:'#1baf7a',stack:'s',borderRadius:0},
+        {label:'Score 2',data:models.map(m=>allData[m].dist[2]/allData[m].total*100),backgroundColor:'#eda100',stack:'s',borderRadius:0},
+        {label:'Score 1',data:models.map(m=>allData[m].dist[1]/allData[m].total*100),backgroundColor:'#e34948',stack:'s',borderRadius:0},
+        {label:'Score 0',data:models.map(m=>allData[m].dist[0]/allData[m].total*100),backgroundColor:'#888780',stack:'s',borderRadius:0},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`}}},
+      scales:{x:{stacked:true,ticks:{color:'#898781'},grid:{display:false}},y:{stacked:true,min:0,max:100,ticks:{color:'#898781',callback:v=>v+'%'},grid:{color:'rgba(0,0,0,0.06)'}}}
+    }
+  });
+}
+
+function buildCriteria(models) {
+  buildLegend('legend-criteria', models);
+  if (charts.criteria) charts.criteria.destroy();
+  charts.criteria = new Chart(document.getElementById('criteriaChart'), {
+    type:'bar',
+    data:{
+      labels:['Mentioned SKU','Recalled facts','Described pattern','Reasonable qty'],
+      datasets: models.map((m,i)=>({
+        label:m,
+        data:[allData[m].criteria.sku, allData[m].criteria.facts, allData[m].criteria.pattern, allData[m].criteria.qty],
+        backgroundColor:PALETTE[i%PALETTE.length], borderRadius:3, barThickness:14
+      }))
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y}%`}}},
+      scales:{x:{ticks:{color:'#898781',font:{size:12}},grid:{display:false}},y:{min:0,max:100,ticks:{color:'#898781',callback:v=>v+'%'},grid:{color:'rgba(0,0,0,0.06)'}}}
+    }
+  });
+}
+
+function showTab(id) {
+  document.querySelectorAll('.tab-section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+    b.classList.toggle('active',['overview','trend','dist','criteria'][i]===id);
+  });
+}
+
+async function init() {
+  const status = document.getElementById('status');
+  try {
+    for (const filename of FILES) {
+      const modelName = extractModelName(filename);
+      status.textContent = `Loading ${modelName}...`;
+      try {
+        const rows = await fetchAndParseXlsx(filename);
+        const analysis = analyzeRows(rows);
+        if (analysis) allData[modelName] = analysis;
+      } catch(e) {
+        console.warn(`Skipping ${filename}: ${e.message}`);
+      }
+    }
+
+    const models = Object.keys(allData);
+    if (!models.length) { status.textContent = 'Could not load any data files.'; return; }
+
+    status.textContent = `Loaded ${models.length} model(s): ${models.join(', ')}`;
+    document.getElementById('tabs').style.display = 'flex';
+
+    buildOverview(models);
+    buildTrend(models);
+    buildDist(models);
+    buildCriteria(models);
+
+  } catch(err) {
+    status.textContent = 'Error: ' + err.message;
+    console.error(err);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
