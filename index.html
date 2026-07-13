@@ -99,33 +99,45 @@ h1 { font-size: 22px; font-weight: 500; margin-bottom: 4px; }
 
 <script>
 // ─────────────────────────────────────────────────────────────────
-// TO ADD A NEW MODEL: just add its filename to this list below.
-// The name shown in charts is auto-extracted from the filename.
+// TO ADD A NEW MODEL:
+// 1. Name your file: Agentic_Stress_Test_ModelName.xlsx
+// 2. Upload it to this GitHub repo
+// 3. Add 'ModelName' to the MODELS list below
+// The dashboard will automatically load and display it.
 // ─────────────────────────────────────────────────────────────────
-const FILES = [
-  'Agentic_Stress_Test_Anthropic.xlsx',
-  'Agentic_Stress_Test_Gemini.xlsx',
-  'Agentic_Stress_test_OpenAI.xlsx',
-  'Agentic_Stress_Test_Perplexity.xlsx',
+const MODELS = [
+  'Anthropic',
+  'Gemini',
+  'OpenAI',
+  'Perplexity',
+  'Claude',
+  'Mistral',
+  'Llama',
+  'Grok',
+  'DeepSeek',
+  'GPT4',
+  'GPT5',
+  'Cohere',
+  'Command',
+  'Gemma',
+  'Falcon',
 ];
 
-const BASE = 'https://raw.githubusercontent.com/bhuvantaliyakula-eng/Agentic-Stress-Test/main/';
+const REPO  = 'bhuvantaliyakula-eng/Agentic-Stress-Test';
+const BASE  = `https://raw.githubusercontent.com/${REPO}/main/`;
 const PALETTE = ['#2a78d6','#1baf7a','#eda100','#e34948','#4a3aa7','#e87ba4','#eb6834','#008300'];
 
 let allData = {};
 let charts  = {};
 
-function extractModelName(filename) {
-  return filename
-    .replace(/\.xlsx$/i, '')
-    .replace(/Agentic_Stress_[Tt]est_?/i, '')
-    .replace(/_/g, ' ')
-    .trim();
+function filename(model) {
+  return `Agentic_Stress_Test_${model}.xlsx`;
 }
 
-async function fetchAndParseXlsx(filename) {
-  const res = await fetch(BASE + filename);
-  if (!res.ok) throw new Error(`Could not load ${filename} (${res.status})`);
+async function tryFetchXlsx(model) {
+  const url = BASE + filename(model);
+  const res = await fetch(url);
+  if (!res.ok) return null;
   const buf = await res.arrayBuffer();
   const wb  = XLSX.read(buf, { type: 'array' });
   const ws  = wb.Sheets[wb.SheetNames[0]];
@@ -152,17 +164,15 @@ function analyzeRows(rows) {
     .sort((a,b)=>Number(a[0])-Number(b[0]))
     .map(([k,v])=>({ x:Number(k), y:v.reduce((a,b)=>a+b,0)/v.length }));
 
-  const isTruthy = v => v===true || v==='True' || v===1 || v==='TRUE';
+  const isTruthy = v => v===true||v==='True'||v===1||v==='TRUE';
   const skuTrue     = rows.filter(r=>isTruthy(r.mentioned_sku)).length;
   const factsTrue   = rows.filter(r=>isTruthy(r.mentioned_facts)).length;
   const patternTrue = rows.filter(r=>isTruthy(r.mentioned_pattern)).length;
   const qtyTrue     = rows.filter(r=>isTruthy(r.reasonable_qty)).length;
 
   return {
-    total, avg,
-    dist,
+    total, avg, dist,
     pct4: dist[4]/total*100,
-    pct0: dist[0]/total*100,
     bucketAvgs,
     criteria: {
       sku:     Math.round(skuTrue/total*100),
@@ -220,7 +230,7 @@ function buildTrend(models) {
     data:{ datasets: models.map((m,i)=>({
       label:m, data:allData[m].bucketAvgs,
       borderColor:PALETTE[i%PALETTE.length], pointBackgroundColor:PALETTE[i%PALETTE.length],
-      pointRadius:3, tension:0.3, borderWidth:2, borderDash: i%2===0?[]:[5,3]
+      pointRadius:3, tension:0.3, borderWidth:2, borderDash:i%2===0?[]:[5,3]
     }))},
     options:{
       responsive:true, maintainAspectRatio:false,
@@ -248,7 +258,7 @@ function buildDist(models) {
       ]
     },
     options:{
-      responsive:true,maintainAspectRatio:false,
+      responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`}}},
       scales:{x:{stacked:true,ticks:{color:'#898781'},grid:{display:false}},y:{stacked:true,min:0,max:100,ticks:{color:'#898781',callback:v=>v+'%'},grid:{color:'rgba(0,0,0,0.06)'}}}
     }
@@ -264,12 +274,12 @@ function buildCriteria(models) {
       labels:['Mentioned SKU','Recalled facts','Described pattern','Reasonable qty'],
       datasets: models.map((m,i)=>({
         label:m,
-        data:[allData[m].criteria.sku, allData[m].criteria.facts, allData[m].criteria.pattern, allData[m].criteria.qty],
+        data:[allData[m].criteria.sku,allData[m].criteria.facts,allData[m].criteria.pattern,allData[m].criteria.qty],
         backgroundColor:PALETTE[i%PALETTE.length], borderRadius:3, barThickness:14
       }))
     },
     options:{
-      responsive:true,maintainAspectRatio:false,
+      responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y}%`}}},
       scales:{x:{ticks:{color:'#898781',font:{size:12}},grid:{display:false}},y:{min:0,max:100,ticks:{color:'#898781',callback:v=>v+'%'},grid:{color:'rgba(0,0,0,0.06)'}}}
     }
@@ -286,34 +296,38 @@ function showTab(id) {
 
 async function init() {
   const status = document.getElementById('status');
-  try {
-    for (const filename of FILES) {
-      const modelName = extractModelName(filename);
-      status.textContent = `Loading ${modelName}...`;
-      try {
-        const rows = await fetchAndParseXlsx(filename);
+  const loaded = [];
+
+  for (const model of MODELS) {
+    status.textContent = `Checking for ${model}...`;
+    try {
+      const rows = await tryFetchXlsx(model);
+      if (rows && rows.length) {
         const analysis = analyzeRows(rows);
-        if (analysis) allData[modelName] = analysis;
-      } catch(e) {
-        console.warn(`Skipping ${filename}: ${e.message}`);
+        if (analysis) {
+          allData[model] = analysis;
+          loaded.push(model);
+          status.textContent = `Loaded ${loaded.join(', ')}...`;
+        }
       }
+    } catch(e) {
+      // file doesn't exist — skip silently
     }
-
-    const models = Object.keys(allData);
-    if (!models.length) { status.textContent = 'Could not load any data files.'; return; }
-
-    status.textContent = `Loaded ${models.length} model(s): ${models.join(', ')}`;
-    document.getElementById('tabs').style.display = 'flex';
-
-    buildOverview(models);
-    buildTrend(models);
-    buildDist(models);
-    buildCriteria(models);
-
-  } catch(err) {
-    status.textContent = 'Error: ' + err.message;
-    console.error(err);
   }
+
+  const models = Object.keys(allData);
+  if (!models.length) {
+    status.textContent = 'No data files found. Upload Agentic_Stress_Test_ModelName.xlsx files to this repo.';
+    return;
+  }
+
+  status.textContent = `Showing ${models.length} model(s): ${models.join(', ')}`;
+  document.getElementById('tabs').style.display = 'flex';
+
+  buildOverview(models);
+  buildTrend(models);
+  buildDist(models);
+  buildCriteria(models);
 }
 
 init();
